@@ -59,7 +59,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "healthy"}
 
 
 # ---------------------------------------------------------------------------
@@ -111,8 +111,89 @@ def state(req: StateRequest = None):
 
 
 # ---------------------------------------------------------------------------
-# GET /tasks — enumerate all tasks and graders (for validation)
+# GET /metadata — environment metadata
 # ---------------------------------------------------------------------------
+@app.get("/metadata")
+def metadata():
+    return {
+        "name": "IncidentResponseEnv",
+        "description": (
+            "An OpenEnv environment where an AI agent manages a live production outage. "
+            "The agent receives system alerts and must diagnose root causes and resolve services."
+        ),
+        "version": "1.0.0",
+        "tags": ["openenv", "incident-response", "sre", "real-world"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /schema — action, observation, state schemas
+# ---------------------------------------------------------------------------
+@app.get("/schema")
+def schema():
+    return {
+        "action": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "Action string chosen from available_actions"
+                }
+            },
+            "required": ["action"]
+        },
+        "observation": {
+            "type": "object",
+            "properties": {
+                "task":                {"type": "string"},
+                "step":                {"type": "integer"},
+                "max_steps":           {"type": "integer"},
+                "alerts":              {"type": "array"},
+                "available_actions":   {"type": "array"},
+                "context":             {"type": "string"},
+                "last_action_result":  {"type": ["string", "null"]},
+                "last_action_error":   {"type": ["string", "null"]},
+            }
+        },
+        "state": {
+            "type": "object",
+            "properties": {
+                "task":         {"type": "string"},
+                "incident_id":  {"type": "string"},
+                "step":         {"type": "integer"},
+                "max_steps":    {"type": "integer"},
+                "done":         {"type": "boolean"},
+                "best_grade":   {"type": "number"},
+                "final_score":  {"type": "number"},
+            }
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /mcp — JSON-RPC 2.0 endpoint
+# ---------------------------------------------------------------------------
+class MCPRequest(BaseModel):
+    jsonrpc: str = "2.0"
+    method: str
+    params: Optional[dict] = None
+    id: Optional[int] = None
+
+
+@app.post("/mcp")
+def mcp(req: MCPRequest):
+    return {
+        "jsonrpc": "2.0",
+        "id": req.id,
+        "result": {
+            "method": req.method,
+            "status": "ok",
+            "env": "IncidentResponseEnv",
+        }
+    }
+
+
+
 @app.get("/tasks")
 def list_tasks():
     return {
