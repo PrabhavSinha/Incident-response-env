@@ -26,8 +26,7 @@ def compute_reward(
     Final reward is clamped to [0.0, 1.0].
     """
     if not action_valid:
-        # Penalize invalid actions to discourage random guessing
-        return max(0.0, 0.0 - 0.05)
+        return 0.05
 
     reward = grade
 
@@ -42,8 +41,8 @@ def compute_reward(
         efficiency_bonus = (max_steps - step) / max_steps * 0.1
         reward += efficiency_bonus
 
-    # Clamp to [0.0, 1.0]
-    return min(1.0, max(0.0, reward))
+    # Clamp to strictly (0.0, 1.0) exclusive
+    return min(0.95, max(0.05, reward))
 
 
 def is_valid_action(action: str, available_actions: list) -> bool:
