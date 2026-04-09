@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "incident-response-env"
+version = "1.0.0"
+description = "OpenEnv environment: AI agent manages a live production outage"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "pydantic>=2.0.0",
+    "openai>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://huggingface.co/spaces/PrabhavSinha/incident-response-env"
+Repository = "https://github.com/PrabhavSinha/incident-response-env"
