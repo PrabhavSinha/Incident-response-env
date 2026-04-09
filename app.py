@@ -5,7 +5,7 @@ The validation script pings POST /reset — must return HTTP 200.
 """
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -173,23 +173,21 @@ def schema():
 # ---------------------------------------------------------------------------
 # POST /mcp — JSON-RPC 2.0 endpoint
 # ---------------------------------------------------------------------------
-class MCPRequest(BaseModel):
-    jsonrpc: str = "2.0"
-    method: str
-    params: Optional[dict] = None
-    id: Optional[int] = None
-
-
 @app.post("/mcp")
-def mcp(req: MCPRequest):
+async def mcp(request: Request):
+    """JSON-RPC 2.0 endpoint — accepts any body."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
     return {
         "jsonrpc": "2.0",
-        "id": req.id,
+        "id": body.get("id", 1),
         "result": {
-            "method": req.method,
+            "method": body.get("method", "ping"),
             "status": "ok",
-            "env": "IncidentResponseEnv",
-        }
+            "env": "incident-response-env",
+        },
     }
 
 
