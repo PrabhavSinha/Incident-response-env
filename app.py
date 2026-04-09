@@ -1,0 +1,151 @@
+"""
+FastAPI server for IncidentResponseEnv.
+Exposes /reset, /step, /state endpoints per OpenEnv spec.
+The validation script pings POST /reset — must return HTTP 200.
+"""
+import os
+from typing import Optional
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from env import IncidentResponseEnv, IncidentAction
+
+app = FastAPI(
+    title="IncidentResponseEnv",
+    description="OpenEnv environment: AI agent manages a live production outage",
+    version="1.0.0",
+)
+
+# ---------------------------------------------------------------------------
+# Global environment instances — one per task
+# ---------------------------------------------------------------------------
+_envs: dict = {}
+
+
+def get_env(task: str = "easy", incident_index: int = 0) -> IncidentResponseEnv:
+    key = f"{task}_{incident_index}"
+    if key not in _envs:
+        _envs[key] = IncidentResponseEnv(task=task, incident_index=incident_index)
+    return _envs[key]
+
+
+# ---------------------------------------------------------------------------
+# Request/response schemas for the HTTP layer
+# ---------------------------------------------------------------------------
+class ResetRequest(BaseModel):
+    task: Optional[str] = "easy"
+    incident_index: Optional[int] = 0
+
+
+class StepRequest(BaseModel):
+    action: str
+    task: Optional[str] = "easy"
+    incident_index: Optional[int] = 0
+
+
+class StateRequest(BaseModel):
+    task: Optional[str] = "easy"
+    incident_index: Optional[int] = 0
+
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+@app.get("/")
+def root():
+    return {"status": "ok", "env": "IncidentResponseEnv", "version": "1.0.0"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# POST /reset — start a new episode
+# ---------------------------------------------------------------------------
+@app.post("/reset")
+def reset(req: ResetRequest = None):
+    if req is None:
+        req = ResetRequest()
+    task = req.task or "easy"
+    idx = req.incident_index or 0
+    try:
+        env = get_env(task, idx)
+        result = env.reset()
+        return JSONResponse(content=result.model_dump(), status_code=200)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# POST /step — agent takes an action
+# ---------------------------------------------------------------------------
+@app.post("/step")
+def step(req: StepRequest):
+    task = req.task or "easy"
+    idx = req.incident_index or 0
+    try:
+        env = get_env(task, idx)
+        action = IncidentAction(action=req.action)
+        result = env.step(action)
+        return JSONResponse(content=result.model_dump(), status_code=200)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# POST /state — get current environment state
+# ---------------------------------------------------------------------------
+@app.post("/state")
+def state(req: StateRequest = None):
+    if req is None:
+        req = StateRequest()
+    task = req.task or "easy"
+    idx = req.incident_index or 0
+    env = get_env(task, idx)
+    return JSONResponse(content=env.state(), status_code=200)
+
+
+# ---------------------------------------------------------------------------
+# GET /tasks — enumerate all tasks and graders (for validation)
+# ---------------------------------------------------------------------------
+@app.get("/tasks")
+def list_tasks():
+    return {
+        "tasks": [
+            {
+                "name": "easy",
+                "description": "Single-signal alert: identify the affected service",
+                "difficulty": "easy",
+                "max_steps": 3,
+                "reward_range": [0.0, 1.0],
+            },
+            {
+                "name": "medium",
+                "description": "3 correlated alerts: identify the root cause",
+                "difficulty": "medium",
+                "max_steps": 5,
+                "reward_range": [0.0, 1.0],
+            },
+            {
+                "name": "hard",
+                "description": "Cascading failure across 4 services: correct ordered resolution",
+                "difficulty": "hard",
+                "max_steps": 8,
+                "reward_range": [0.0, 1.0],
+            },
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 7860))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)

@@ -1,0 +1,108 @@
+name: incident-response-env
+version: "1.0.0"
+description: >
+  IncidentResponseEnv — An OpenEnv environment where an AI agent manages a live
+  production outage. The agent receives a stream of system alerts (CPU spike,
+  DB timeout, memory leak, 500 errors) and must diagnose the root cause,
+  escalate correctly, and resolve services in the right order.
+
+author: ""
+tags:
+  - openenv
+  - incident-response
+  - sre
+  - production
+  - real-world
+
+observation_space:
+  type: object
+  description: >
+    Structured observation containing the current alert stream, available actions,
+    context description, and feedback from the previous action.
+  fields:
+    task:
+      type: string
+      enum: [easy, medium, hard]
+    step:
+      type: integer
+    max_steps:
+      type: integer
+    alerts:
+      type: array
+      items:
+        type: object
+        fields:
+          service: string
+          alert_type: string
+          severity: string
+          message: string
+          timestamp: float
+    available_actions:
+      type: array
+      items:
+        type: string
+    context:
+      type: string
+    last_action_result:
+      type: string
+      nullable: true
+    last_action_error:
+      type: string
+      nullable: true
+
+action_space:
+  type: object
+  description: >
+    A single action string chosen from available_actions.
+    Format varies by task:
+      easy:   identify:<service_name>
+      medium: diagnose:<root_cause>
+      hard:   resolve:<svc1>:<act1>,resolve:<svc2>:<act2>,...
+  fields:
+    action:
+      type: string
+
+reward:
+  type: float
+  range: [0.0, 1.0]
+  description: >
+    Shaped reward signal. Primary signal is the grader score (0.0–1.0).
+    Includes partial credit for hard task (positional step matching),
+    improvement bonus for getting closer to the correct answer,
+    and efficiency bonus for solving quickly.
+
+tasks:
+  - name: easy
+    description: "Single-signal alert: identify the affected service"
+    difficulty: easy
+    max_steps: 3
+    reward_range: [0.0, 1.0]
+    grader: deterministic
+    success_threshold: 1.0
+
+  - name: medium
+    description: "3 correlated alerts: identify the root cause from options"
+    difficulty: medium
+    max_steps: 5
+    reward_range: [0.0, 1.0]
+    grader: deterministic
+    success_threshold: 1.0
+
+  - name: hard
+    description: "Cascading failure across 4 services: correct ordered resolution steps"
+    difficulty: hard
+    max_steps: 8
+    reward_range: [0.0, 1.0]
+    grader: deterministic_partial_credit
+    success_threshold: 0.5
+
+endpoints:
+  reset: POST /reset
+  step:  POST /step
+  state: POST /state
+  tasks: GET  /tasks
+
+docker:
+  port: 7860
+  build_context: "."
+  dockerfile: Dockerfile
